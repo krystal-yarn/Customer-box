@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="zh-CN">
 <head>
@@ -77,8 +76,7 @@ p{line-height:1.6}
 .gallery-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .gallery-item{border:1px solid var(--line);border-radius:12px;background:#fff;padding:7px;color:var(--ink);box-shadow:none}
 .gallery-item img{width:100%;height:110px;object-fit:contain;background:#fff8fb;border-radius:8px}
-.gallery-item span{display:block;font-size:11px;overflow-wrap:anywhere;margin-top:5px}
-@media(max-width:460px){.gallery-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+ @media(max-width:460px){.gallery-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:420px){.panel,.customer-card{padding:14px}.slots{gap:7px}.slot-card{padding:10px 4px}.slot-value{font-size:13px}}
 @page{size:A4 portrait;margin:8mm}
 @media print{
@@ -111,7 +109,6 @@ p{line-height:1.6}
 <div class="actions"><button type="button" id="clearLogo" class="secondary">移除 Logo</button></div>
 <div id="logoStatus" class="muted">尚未设置自定义 Logo。</div>
 </details>
-
 
 <details class="library-box">
 <summary>管理款式库（名字＋照片＋两个教程链接）</summary>
@@ -194,6 +191,16 @@ p{line-height:1.6}
 <div class="gallery-panel">
 <div class="gallery-head"><strong id="galleryTitle">选择照片</strong><button type="button" id="closeGallery" class="secondary">关闭</button></div>
 <input id="gallerySearch" type="search" placeholder="搜索图片文件名…">
+<details class="library-box" id="githubUploadBox">
+ <summary>上传照片到共用图库</summary>
+ <p class="muted">上传一次后，老虎机和顾客网页都能读取。Token 只保存在当前浏览器中，不会写进网页代码。</p>
+ <div class="field"><label for="githubTokenInput">GitHub Token（只在自己的设备输入）</label><input id="githubTokenInput" type="password" autocomplete="off" placeholder="粘贴你自己保存的 Token"></div>
+ <div class="actions"><button type="button" id="saveGithubToken" class="secondary">保存 Token</button><button type="button" id="clearGithubToken" class="secondary">清除 Token</button></div>
+ <div class="field"><label for="galleryUploadFile">选择照片（JPG / PNG / WEBP，最大 5MB）</label><input id="galleryUploadFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif"></div>
+ <div class="field"><label for="galleryUploadName">文件名</label><input id="galleryUploadName" placeholder="例如：浅粉色小花挂绳.jpg"></div>
+ <div class="actions"><button type="button" id="uploadGalleryPhoto">上传到当前图库文件夹</button></div>
+ <div id="uploadStatus" class="muted">请先保存 Token。当前文件夹：photo/Styles</div>
+</details>
 <div id="galleryStatus" class="muted">准备读取图库…</div>
 <div id="galleryGrid" class="gallery-grid"></div>
 </div>
@@ -208,7 +215,7 @@ let orderHistory=readStore(HISTORY_KEY);
 let styleLibrary=readStore("krystalStyleLibrary");
 let materialLibrary=readStore("krystalMaterialLibrary");
 let customLogo=localStorage.getItem("krystalCustomerLogo")||"";
-const defaultSlots=[
+ const defaultSlots=[
 {label:"主色",value:"浅粉色",color:"#e9a7c0"},
 {label:"配色",value:"奶油白",color:"#fff0d2"},
 {label:"扣子 1",value:"浅紫色",color:"#b9a9e7"},
@@ -217,32 +224,76 @@ const defaultSlots=[
 ];
 function assetUrl(v){v=String(v||"").trim();if(!v)return "";if(/^https?:\/\//i.test(v))return v;return REPO_RAW+v.replace(/^\.\//,"").replace(/^\//,"");}
 const GITHUB_API="https://api.github.com/repos/krystal-yarn/Customer-box/contents/";
+const GITHUB_RAW="https://raw.githubusercontent.com/krystal-yarn/Customer-box/main/";
+const GITHUB_TOKEN_KEY="krystalGalleryGithubToken";
 let galleryTarget="style",galleryFiles=[];
+function currentGalleryFolder(){return galleryTarget==="style"?"photo/Styles":"photo/Materials";}
+function loadGithubToken(){const t=localStorage.getItem(GITHUB_TOKEN_KEY)||"";$("githubTokenInput").value=t;$("uploadStatus").textContent=(t?"Token 已保存在此浏览器。":"请先保存 Token。")+" 当前文件夹："+currentGalleryFolder();}
+$("saveGithubToken").addEventListener("click",()=>{
+ const token=$("githubTokenInput").value.trim();
+ if(!token){$("uploadStatus").textContent="请先粘贴 Token。";return;}
+ localStorage.setItem(GITHUB_TOKEN_KEY,token);
+ $("uploadStatus").textContent="Token 已保存在此浏览器。当前文件夹："+currentGalleryFolder();
+});
+$("clearGithubToken").addEventListener("click",()=>{
+ localStorage.removeItem(GITHUB_TOKEN_KEY);$("githubTokenInput").value="";
+ $("uploadStatus").textContent="已清除本浏览器保存的 Token。";
+});
+$("galleryUploadFile").addEventListener("change",()=>{
+ const f=$("galleryUploadFile").files&&$("galleryUploadFile").files[0];
+ if(!f)return;
+ $("galleryUploadName").value=f.name||"photo.jpg";
+});
+async function uploadGalleryPhoto(){
+ const token=localStorage.getItem(GITHUB_TOKEN_KEY)||"";
+ const file=$("galleryUploadFile").files&&$("galleryUploadFile").files[0];
+ if(!token){$("uploadStatus").textContent="请先输入并保存 GitHub Token。";return;}
+ if(!file){$("uploadStatus").textContent="请先选择一张照片。";return;}
+ if(!file.type.startsWith("image/")){$("uploadStatus").textContent="请选择图片文件。";return;}
+ if(file.size>5*1024*1024){$("uploadStatus").textContent="照片超过 5MB，请先压缩后再上传。";return;}
+ let name=($("galleryUploadName").value.trim()||file.name).replace(/[\\/:*?"<>|#%{}\\^~\\[\\]`]/g,"-").replace(/\s+/g,"-");
+ if(!/\.(jpe?g|png|webp|gif)$/i.test(name))name+="."+((file.type.split("/")[1]||"jpg").replace("jpeg","jpg"));
+ const path=currentGalleryFolder()+"/"+Date.now()+"-"+name;
+ $("uploadGalleryPhoto").disabled=true;$("uploadStatus").textContent="正在上传，请稍候…";
+ try{
+  const dataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result));r.onerror=reject;r.readAsDataURL(file);});
+  const res=await fetch(GITHUB_API+path,{method:"PUT",headers:{Accept:"application/vnd.github+json",Authorization:"Bearer "+token,"X-GitHub-Api-Version":"2022-11-28","Content-Type":"application/json"},body:JSON.stringify({message:"Add shared gallery photo: "+name,content:dataUrl.split(",")[1],branch:"main"})});
+  if(!res.ok){let msg="上传失败（HTTP "+res.status+"）。";try{const d=await res.json();if(d.message)msg+=d.message;}catch{}if(res.status===401)msg="Token 无效或已过期，请重新创建 Token。";else if(res.status===403)msg="权限不足或触发 GitHub 限制，请检查两个仓库的 Contents 权限。";throw Error(msg);}
+  $("uploadStatus").textContent="上传成功！正在刷新图库…";
+  $("galleryUploadFile").value="";$("galleryUploadName").value="";
+  await openGallery(galleryTarget);
+  $("uploadStatus").textContent="上传成功。当前文件夹："+currentGalleryFolder();
+ }catch(e){$("uploadStatus").textContent=e.message||"上传失败，请检查网络和 Token。";}
+ finally{$("uploadGalleryPhoto").disabled=false;}
+}
+$("uploadGalleryPhoto").addEventListener("click",uploadGalleryPhoto);
 async function openGallery(target){
-galleryTarget=target;$("galleryModal").classList.remove("hidden");
-$("galleryTitle").textContent=target==="style"?"选择款式照片":"选择材料照片";
-$("galleryStatus").textContent="正在读取 GitHub 照片…";$("galleryGrid").innerHTML="";$("gallerySearch").value="";
-try{
-const folder=target==="style"?"photo/Styles":"photo/Materials";
-const res=await fetch(GITHUB_API+folder,{headers:{Accept:"application/vnd.github+json"}});
-if(!res.ok)throw Error("无法读取照片文件夹");
-const files=await res.json();
-galleryFiles=files.filter(f=>f.type==="file"&&/\.(jpe?g|png|webp|gif)$/i.test(f.name)).map(f=>({name:f.name,path:f.path,url:f.download_url}));
-renderGallery();
-}catch(e){galleryFiles=[];$("galleryStatus").textContent="读取图库失败，请确认照片已上传到 photo/Styles 或 photo/Materials。";}
+ galleryTarget=target;$("galleryModal").classList.remove("hidden");
+ $("galleryTitle").textContent=target==="style"?"选择款式照片":"选择材料照片";
+ $("galleryStatus").textContent="正在读取 GitHub 照片…";$("galleryGrid").innerHTML="";$("gallerySearch").value="";
+ $("uploadStatus").textContent=(localStorage.getItem(GITHUB_TOKEN_KEY)?"Token 已保存。":"请先保存 Token。")+" 当前文件夹："+currentGalleryFolder();
+ try{
+  const folder=currentGalleryFolder();
+  const res=await fetch(GITHUB_API+folder,{headers:{Accept:"application/vnd.github+json"}});
+  if(!res.ok)throw Error("无法读取照片文件夹");
+  const files=await res.json();
+  galleryFiles=files.filter(f=>f.type==="file"&&/\.(jpe?g|png|webp|gif)$/i.test(f.name)).map(f=>({name:f.name,path:f.path,url:f.download_url}));
+  renderGallery();
+ }catch(e){galleryFiles=[];$("galleryStatus").textContent="读取图库失败，请确认照片已上传到 photo/Styles 或 photo/Materials。";}
 }
 function renderGallery(){
-const q=$("gallerySearch").value.trim().toLowerCase();
-const files=galleryFiles.filter(f=>f.name.toLowerCase().includes(q));$("galleryGrid").innerHTML="";
-files.forEach(f=>{
-const b=document.createElement("button");b.type="button";b.className="gallery-item";
-const img=document.createElement("img");img.src=f.url;img.alt=f.name;
-const name=document.createElement("span");name.textContent=f.name;b.append(img,name);
-b.addEventListener("click",()=>{$(galleryTarget==="style"?"newStylePhoto":"newMatPhoto").value=f.path;$("galleryModal").classList.add("hidden");});
-$("galleryGrid").appendChild(b);
-});
-$("galleryStatus").textContent=files.length?`找到 ${files.length} 张照片，点击缩略图选择。`:"没有符合条件的照片。";
+ const q=$("gallerySearch").value.trim().toLowerCase();
+ const files=galleryFiles.filter(f=>f.name.toLowerCase().includes(q));$("galleryGrid").innerHTML="";
+ files.forEach(f=>{
+  const b=document.createElement("button");b.type="button";b.className="gallery-item";
+  const img=document.createElement("img");img.src=f.url;img.alt=f.name;
+  const name=document.createElement("span");name.textContent=f.name;b.append(img,name);
+  b.addEventListener("click",()=>{$(galleryTarget==="style"?"newStylePhoto":"newMatPhoto").value=f.path;$("galleryModal").classList.add("hidden");});
+  $("galleryGrid").appendChild(b);
+ });
+ $("galleryStatus").textContent=files.length?`找到 ${files.length} 张照片，点击缩略图选择。`:"没有符合条件的照片。";
 }
+loadGithubToken();
 $("chooseStylePhoto").addEventListener("click",()=>openGallery("style"));
 $("chooseMaterialPhoto").addEventListener("click",()=>openGallery("material"));
 $("closeGallery").addEventListener("click",()=>$("galleryModal").classList.add("hidden"));
@@ -344,7 +395,7 @@ return JSON.parse(new TextDecoder().decode(bytes));
 }
 function validUrl(v){if(!v)return "";try{const u=new URL(v);return ["http:","https:"].includes(u.protocol)?u.href:"";}catch{return "";}}
 function saveHistory(){try{localStorage.setItem(HISTORY_KEY,JSON.stringify(orderHistory));return true;}catch{return false;}}
-function renderHistory(){
+ function renderHistory(){
 const box=$("historyList");if(!box)return;
 const q=$("historySearch").value.trim().toLowerCase();
 const rows=orderHistory.filter(r=>(r.order+" "+r.style+" "+r.note).toLowerCase().includes(q));
