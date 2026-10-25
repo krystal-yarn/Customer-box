@@ -105,10 +105,7 @@ p{line-height:1.6}
    <div class="actions"><button type="button" id="clearLogo" class="secondary">移除 Logo</button></div>
    <div id="logoStatus" class="muted">尚未设置自定义 Logo，将使用默认小狐狸图案。</div>
   </details>
-  <div class="field">
-   <label for="styleName">从款式库选择</label>
-   <select id="styleName"><option value="">请先在下方款式库添加款式</option></select>
-  </div>
+  
   <div id="stylePreview" class="notice hidden"></div>
   <details class="library-box">
    <summary>管理款式库（名字＋照片＋两个教程链接）</summary>
@@ -130,6 +127,10 @@ p{line-height:1.6}
    <button type="button" id="saveMaterial" class="secondary">＋ 保存到材料库</button>
    <div id="materialList" class="muted"></div>
   </details>
+  <div class="field">
+   <label for="styleName">从款式库选择</label>
+   <select id="styleName"><option value="">请先在款式库添加款式</option></select>
+  </div>
   <h2>材料抽取结果</h2>
   <div id="slotEditor"></div>
   <div class="actions"><button type="button" id="addSlot" class="secondary">＋ 添加材料格</button><button type="button" id="resetSlots" class="secondary">恢复示例格子</button></div>
