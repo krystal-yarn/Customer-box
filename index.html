@@ -304,7 +304,7 @@ async function openGallery(target){
  $("gallerySearch").value="";
 
  try{
-  const folder=target==="style"?"photo/Styles":"photo/Materials";
+  const folder=target==="style"?"photo/styles":"photo/Materials";
   const response=await fetch(GITHUB_API+folder,{
    headers:{Accept:"application/vnd.github+json"}
   });
